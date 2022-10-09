@@ -1,20 +1,12 @@
 /******************************************************************************
 
 PROGRAM:  ssl-client.c
-AUTHOR:   ***** Lincoln Lorscheider *****
+AUTHOR:   ***** Lincoln Lorscheider, Kaycee Valdez, Bryant Hanks *****
 COURSE:   CS469 - Distributed Systems (Regis University)
 SYNOPSIS: This program is a small client application that establishes a secure
           TCP connection to a server and simply exchanges messages. It uses a
-          SSL/TLS connection using X509 certificates generated with the
-
-
-
-          ssl
+          SSL/TLS connection using X509 certificates generated with the ssl
           application.
-
-          The purpose is to demonstrate how to establish and use secure
-          communication channels between a client and server using public key
-          cryptography.
 
           Some of the code and descriptions can be found in "Network Security
           with OpenSSL", O'Reilly Media, 2002.
@@ -40,13 +32,18 @@ SYNOPSIS: This program is a small client application that establishes a secure
 #include <openssl/x509_vfy.h>
 #include <stdbool.h>
 #define DEFAULT_PORT        4433
+#define BACKUP_PORT         4434
 #define DEFAULT_HOST        "localhost"
+#define BACKUP_HOST        "localhost"
 #define MAX_HOSTNAME_LENGTH 256
 #define BUFFER_SIZE         256
-#define MAX_FILENAME_LENGTH 250 //todo use this to prevent long filenames from overflowing the buffer when we prepend GET
+#define MAX_FILENAME_LENGTH 250
 
-//Declare function prototype
+//Declare function prototypes
 int download_file(SSL *ssl, const char* filename);
+int listFiles(SSL *ssl);
+bool checkPassword (const char* password);// See answer @ https://stackoverflow.com/questions/10273414/library-for-passwords-salt-hash-in-c
+void setActiveServer(int* port,  const char* host); //This method should be called on pointers to int and char array, so that we can pass those variables into create_socket()
 /******************************************************************************
 
 This function does the basic necessary housekeeping to establish a secure TCP
@@ -132,6 +129,7 @@ int main(int argc, char** argv) {
   SSL_CTX*          ssl_ctx;
   SSL*              ssl;
 
+  // *******************   this section might need to go away. From here... ******************
   if (argc != 2) {
     fprintf(stderr, "Client: Usage: ssl-client <server name>:<port>\n");
     exit(EXIT_FAILURE);
@@ -150,7 +148,7 @@ int main(int argc, char** argv) {
       port = (unsigned int) atoi(temp_ptr+sizeof(char));
     }
   }
-
+    // ******************************* ...down to here ***********************************
   // Initialize OpenSSL ciphers and digests
   OpenSSL_add_all_algorithms();
 
@@ -173,10 +171,11 @@ int main(int argc, char** argv) {
   // This disables SSLv2, which means only SSLv3 and TLSv1 are available
   // to be negotiated between client and server
   SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SSLv2);
-
   // Create a new SSL connection state object
   ssl = SSL_new(ssl_ctx);
-
+  // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
+  // **** kaycee should insert her setActiveServer call here ***
+  // setActiveServer(remote_host,port)
   // Create the underlying TCP socket connection to the remote host
   sockfd = create_socket(remote_host, port);
   if(sockfd != 0)
@@ -201,19 +200,18 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  //*************************************************************************
-  // YOUR CODE HERE TODO print appropriate errors based on exit status of download_file()
   int status;
   //get filename from user
-  printf("Please enter filename to request from server (filename must not have spaces): ");
+  printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
   fgets(buffer, BUFFER_SIZE-1, stdin);
   buffer[strlen(buffer)-1] = '\0';
-  //write filename to file server
+  // **** Bryant Modify this section to either call listFiles() or download_file(), based on if buffer == "ls" or not
   status = download_file(ssl, buffer);
   switch (status){
       case 0:
           printf("%s downloaded\n", buffer);
           break;
+          // ******* TODO update ERROR messages **********
       case 1:
           printf("SERVER ERROR: Could not open requested file\n");
           break;
@@ -245,7 +243,9 @@ int main(int argc, char** argv) {
 
   return EXIT_SUCCESS;
 }
+
 int download_file(SSL *ssl, const char* filename){
+    // **** TODO Bryant modify this method as necessary to receive mp3s. The error code mapping in main() will also need to get updated
     int nbytes_written;
     int nbytes_read;
     int file_descriptor;
@@ -283,4 +283,13 @@ int download_file(SSL *ssl, const char* filename){
         close(file_descriptor);
     }
     return status;
+}
+
+int listFiles(SSL *ssl){
+    // **** TODO Bryant modify this method as necessary to print the file list to console. The error code mapping in main() will also need to get updated. It should probably get it's own
+    int status = 0;
+    int error_number;
+    char request[BUFFER_SIZE];
+    char local_buffer[BUFFER_SIZE];
+    // request = "LIST *.mp3"
 }
