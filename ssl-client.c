@@ -175,7 +175,7 @@ int main(int argc, char** argv) {
   ssl = SSL_new(ssl_ctx);
   // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
   // **** kaycee should insert her setActiveServer call here ***
-  // setActiveServer(remote_host,port)
+  setActiveServer(remote_host,port)
   // Create the underlying TCP socket connection to the remote host
   sockfd = create_socket(remote_host, port);
   if(sockfd != 0)
@@ -292,4 +292,41 @@ int listFiles(SSL *ssl){
     char request[BUFFER_SIZE];
     char local_buffer[BUFFER_SIZE];
     // request = "LIST *.mp3"
+}
+
+// Kaycee's code for setActiveServer
+void setActiveServer(int* port,  const char* host) {
+  int         port = DEFAULT_PORT;
+  int*        port_default;
+  char        host = DEFAULT_HOST;
+  const char* host_default; 
+
+  port_default = &port;
+  host_default = &host; 
+
+  // Creates the underlying TCP socket connection to the remote host
+  sockfd = create_socket(host_default, port_default);
+
+  if(sockfd != 0)
+    fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", host_default, port_default);
+
+  // The first attempt to connect did not succeed; tries the backup server
+  else {
+    port2 = BACKUP_PORT;
+    int* port_backup;
+    host2 = BACKUP_HOST; 
+    const char* host_backup;
+
+    port_backup = &port2;
+    host_backup = &host2; 
+
+    printf("Trying backup server on port %u\n", port_backup);
+    sockfd = create_socket(host_backup, port_backup);
+    if(sockfd != 0)
+      fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", host_backup, port_backup);
+    else {
+      fprintf(stderr, "Client: Could not establish TCP connection to %s on port %u\n", host_backup, port_backup);
+      exit(EXIT_FAILURE);
+    }
+  }
 }
