@@ -23,6 +23,11 @@ SYNOPSIS: This program is a small client application that establishes a secure
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <time.h>
+#include <crypt.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
 
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
@@ -38,6 +43,10 @@ SYNOPSIS: This program is a small client application that establishes a secure
 #define MAX_HOSTNAME_LENGTH 256
 #define BUFFER_SIZE         256
 #define MAX_FILENAME_LENGTH 250
+#define PASSWORD_LENGTH 32
+#define USERNAME_LENGTH 32
+#define HASH_LENGTH     264
+#define SEED_LENGTH     8
 
 //Declare function prototypes
 int download_file(SSL *ssl, const char* filename);
@@ -128,6 +137,11 @@ int main(int argc, char** argv) {
   int               total = 0;
   SSL_CTX*          ssl_ctx;
   SSL*              ssl;
+  //below is for password section
+  char  bufferPW[USERNAME_LENGTH + HASH_LENGTH + 1];
+  char  password[PASSWORD_LENGTH];
+  char  username[USERNAME_LENGTH];
+  char  hash[HASH_LENGTH];
 
   // *******************   this section might need to go away. From here... ******************
   if (argc != 2) {
@@ -173,7 +187,6 @@ int main(int argc, char** argv) {
   SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SSLv2);
   // Create a new SSL connection state object
   ssl = SSL_new(ssl_ctx);
-  // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
   // **** kaycee should insert her setActiveServer call here ***
   setActiveServer(remote_host,port)
   // Create the underlying TCP socket connection to the remote host
@@ -201,37 +214,130 @@ int main(int argc, char** argv) {
   }
 
   int status;
+  
+  // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
+  while(1){
+	  const char *const seedchars = "./0123456789"
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz";
+	  unsigned long int seed[2];
+		
+	  //"$5$ selects the SHA256 algorithm. The
+	  // length of this char array is the seed length plus 3 to account for 
+	  // the identifier and two '$" separators
+	  char salt[] = "$5$........";
+
+	  // Generate a (not very) random seed.
+	  seed[0] = time(NULL);
+	  seed[1] = getpid() ^ (seed[0] >> 14 & 0x30000);
+
+	  // Convert the salt into printable characters from the seedchars string
+	  for (int i = 0; i < 8; i++)
+		salt[3+i] = seedchars[(seed[i/5] >> (i%5)*6) & 0x3f];
+
+	  // Enter the username that will be stored with the hash
+	  fprintf(stdout, "Enter username: ");
+	  fgets(username, USERNAME_LENGTH, stdin);
+	  username[strlen(username)-1] = '\0';
+
+	  // Enter the password
+	  fprintf(stdout, "Enter password: ");
+	  getPassword(password);
+	  
+	  // Now we create a cryptographic hash of the password with the SHA256
+	  // algorithm using the generated salt string
+	  strncpy(hash, crypt(password, salt), HASH_LENGTH);
+
+	  // Let's just get rid of that password since we're done with it
+	  bzero(password, PASSWORD_LENGTH);
+
+	  fprintf(stdout, "\n");
+	  
+	  sprintf(bufferPW, "%s,%s\n", username, hash);
+	  
+	  //send username and password to server which will read from a file and compare. After comparing send back 0 for matching
+	  status = checkPassword(ssl, bufferPW);
+	  
+	  if(status = 0){
+		printf("Username & Password Accepted\n");
+		status = null;
+		exit();
+	  }
+	  else{
+		printf("Invalid Username or Password\n");
+	  }
+  }
+  
+  
   //get filename from user
-  printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
-  fgets(buffer, BUFFER_SIZE-1, stdin);
-  buffer[strlen(buffer)-1] = '\0';
   // **** Bryant Modify this section to either call listFiles() or download_file(), based on if buffer == "ls" or not
-  status = download_file(ssl, buffer);
-  switch (status){
-      case 0:
-          printf("%s downloaded\n", buffer);
-          break;
-          // ******* TODO update ERROR messages **********
-      case 1:
-          printf("SERVER ERROR: Could not open requested file\n");
-          break;
-      case 2:
-          printf("SERVER ERROR: Opened, but could not read requested file\n");
-          break;
-      case 3:
-          printf("SERVER ERROR: Server could not write to socket during file transmission\n");
-          break;
-      case 4:
-          printf("RPC ERROR, invalid command\n");
-          break;
-      case 5:
-          printf("RPC ERROR, requested path is a directory, not a file\n");
-          break;
-      case 6:
-          printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
-          break;
-      default:
-          printf("Undefined Error Code: %d\n", status);
+  while(1){
+	  printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
+	  fgets(buffer, BUFFER_SIZE-1, stdin);
+	  buffer[strlen(buffer)-1] = '\0';
+	  if(strcmp(buffer,"ls"){
+		status = listFiles(ssl, buffer);
+		//status = download_file(ssl, buffer);
+		switch (status){
+			case 0:
+				printf("%s downloaded\n", buffer);
+				break;
+				//break;
+			  // ******* TODO update ERROR messages **********
+			case 1:
+				printf("SERVER ERROR: Could not open requested file\n");
+				break;
+			case 2:
+				printf("SERVER ERROR: Opened, but could not read requested file\n");
+				break;
+			case 3:
+				printf("SERVER ERROR: Server could not write to socket during file transmission\n");
+				break;
+			case 4:
+				printf("RPC ERROR, invalid command\n");
+				break;
+			case 5:
+				printf("RPC ERROR, requested path is a directory, not a file\n");
+				break;
+			case 6:
+				printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
+				break;
+			default:
+				printf("Undefined Error Code: %d\n", status);
+		}
+		
+	  }
+	  else {
+  
+		  // ****
+		status = download_file(ssl, buffer);
+		switch (status){
+			case 0:
+				printf("%s downloaded\n", buffer);
+				exit();
+				//break;
+			  // ******* TODO update ERROR messages **********
+			case 1:
+				printf("SERVER ERROR: Could not open requested file\n");
+				break;
+			case 2:
+				printf("SERVER ERROR: Opened, but could not read requested file\n");
+				break;
+			case 3:
+				printf("SERVER ERROR: Server could not write to socket during file transmission\n");
+				break;
+			case 4:
+				printf("RPC ERROR, invalid command\n");
+				break;
+			case 5:
+				printf("RPC ERROR, requested path is a directory, not a file\n");
+				break;
+			case 6:
+				printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
+				break;
+			default:
+				printf("Undefined Error Code: %d\n", status);
+		}
+	  }
   }
 
   // Deallocate memory for the SSL data structures and close the socket
@@ -285,13 +391,51 @@ int download_file(SSL *ssl, const char* filename){
     return status;
 }
 
-int listFiles(SSL *ssl){
+int listFiles(SSL *ssl, const char* ls){
     // **** TODO Bryant modify this method as necessary to print the file list to console. The error code mapping in main() will also need to get updated. It should probably get it's own
+    //int status = 0;
+    //int error_number;
+    //char request[BUFFER_SIZE];
+    //char local_buffer[BUFFER_SIZE];
+    // request = "LIST *.mp3"
+	
+	int nbytes_written;
+    int nbytes_read;
+    int file_descriptor;
     int status = 0;
     int error_number;
     char request[BUFFER_SIZE];
     char local_buffer[BUFFER_SIZE];
-    // request = "LIST *.mp3"
+    bool file_complete = false;
+
+    sprintf(request,"GET: %s", ls); //append user-input filepath to appropriate request type (in order to test RPC format error detection, change to something other than GET and build/run)
+	nbytes_written = SSL_write(ssl,request,BUFFER_SIZE);//send request to server
+    if (nbytes_written < 0)
+        fprintf(stderr, "Client: Error writing to socket: %s\n", strerror(errno));
+    else {
+        file_descriptor = open(ls, O_CREAT|O_RDWR,(mode_t)0644);
+        while (file_complete==false) {
+            nbytes_read = SSL_read(ssl, local_buffer, BUFFER_SIZE);
+            if (nbytes_read < 0)
+                fprintf(stderr, "Server: Error reading from socket: %s\n", strerror(errno));
+            else if (nbytes_read == 0) {
+                printf("Connection Terminated by Server\n");
+                file_complete = true;
+            }
+            else {
+                error_number = sscanf(local_buffer, "ERROR: %d", &status);
+                if (error_number == 0){
+                    write(file_descriptor, local_buffer, BUFFER_SIZE);
+                }
+                else{
+                    file_complete = true;
+                }
+            }
+            bzero(local_buffer, BUFFER_SIZE);
+        }
+        close(file_descriptor);
+    }
+    return status;
 }
 
 // Kaycee's code for setActiveServer
@@ -329,4 +473,68 @@ void setActiveServer(int* port,  const char* host) {
       exit(EXIT_FAILURE);
     }
   }
+}
+
+void getPassword(char* password) {
+    static struct termios oldsettings, newsettings;
+    int c, i = 0;
+
+    // Save the current terminal settings and copy settings for resetting
+    tcgetattr(STDIN_FILENO, &oldsettings);
+    newsettings = oldsettings;
+
+    // Hide, i.e., turn off echoing, the characters typed to the console 
+    newsettings.c_lflag &= ~(ECHO);
+
+    // Set the new terminal settings
+    tcsetattr(STDIN_FILENO, TCSANOW, &newsettings);
+
+    // Read the password from the console one character at a time
+    while ((c = getchar())!= '\n' && c != EOF && i < HASH_LENGTH)
+      password[i++] = c;
+    
+    password[i] = '\0';
+
+    // Restore the old (saved) terminal settings
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldsettings);
+}
+
+int checkPassword(SSL *ssl, const char* UandP){
+	int nbytes_written;
+    int nbytes_read;
+    int file_descriptor;
+    int status = 0;
+    int error_number;
+    char request[BUFFER_SIZE];
+    char local_buffer[BUFFER_SIZE];
+    bool file_complete = false;
+
+    sprintf(request,"UP: %s", UandP); 
+    nbytes_written = SSL_write(ssl,request,BUFFER_SIZE);//send request to server
+    if (nbytes_written < 0)
+        fprintf(stderr, "Client: Error writing to socket: %s\n", strerror(errno));
+    else {
+        //file_descriptor = open(filename, O_CREAT|O_RDWR,(mode_t)0644);
+        //while (file_complete==false) {
+            nbytes_read = SSL_read(ssl, local_buffer, BUFFER_SIZE);
+            if (nbytes_read < 0)
+                fprintf(stderr, "Server: Error reading from socket: %s\n", strerror(errno));
+            //else if (nbytes_read == 0) {
+            //    printf("Connection Terminated by Server\n");
+            //    file_complete = true;
+            //}
+            else {
+                error_number = sscanf(local_buffer, "ERROR: %d", &status);
+                //if (error_number == 0){
+                    //write(file_descriptor, local_buffer, BUFFER_SIZE);
+                //}
+                //else{
+                //    file_complete = true;
+                //}
+            }
+            bzero(local_buffer, BUFFER_SIZE);
+        //}
+        //close(file_descriptor);
+    }
+    return status;
 }
