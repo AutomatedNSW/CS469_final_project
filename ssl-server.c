@@ -40,7 +40,7 @@ SYNOPSIS: This program is a small server application that receives incoming TCP
 #define MP3_DIR           "mp3"
 
 //declare function prototype
-int send_file(SSL *ssl, const char* filename);
+int response(SSL *ssl, const char* filename);
 int do_stat(char* filename);
 int do_ls(const char* dirname);
 /******************************************************************************
@@ -243,7 +243,7 @@ int main(int argc, char **argv) {
   }
 
   // This will create a network socket and return a socket descriptor, which is
-  // and works just like a file descriptor, but for network communcations. Note
+  // and works just like a file descriptor, but for network communications. Note
   // we have to specify which TCP/UDP port on which we are communicating as an
   // argument to our user-defined create_socket() function.
   sockfd = create_socket(port);
@@ -325,58 +325,49 @@ int main(int argc, char **argv) {
           status=5;
           printf("Requested path %s is a directory",filename);
       }
-      if (status==0){
-          if(&& filename != "ls"){
+      if (status == 0){
         status = send_file(ssl, filename);
-          }
-          else{
-              status = do_ls(ssl);
-          }
       }
-      if(status!=0){
+      if(status != 0){
           printf("ERROR: %d %s\n", status, buffer);
           sprintf(buffer, "ERROR: %d", status);
           SSL_write(ssl, buffer, BUFFER_SIZE);
       }
       bzero(buffer, BUFFER_SIZE);
-
       // File transfer complete
       printf("Server: Completed file transfer to client (%s)\n", client_addr);
-
       // Terminate the SSL session, close the TCP connection, and clean up
       printf("Server: Terminating SSL session and TCP connection with client (%s)\n",
-	     client_addr);
+             client_addr);
       SSL_free(ssl);
       close(client);
     }
-
     // Tear down and clean up server data structures before terminating
     SSL_CTX_free(ssl_ctx);
     cleanup_openssl();
     close(sockfd);
-
     return EXIT_SUCCESS;
   }
 #pragma clang diagnostic pop
 }
 
 // Outputs the contents of a single ordinary file
-int send_file(SSL *ssl, const char* filename) {
+int response(SSL *ssl, const char* filename) {
+    DIR* d;
+    struct dirent* currentEntry;
     int inputDescriptor;
     int local_status = 0;
     ssize_t bytesRead=1;
     ssize_t bytesWritten;
     char send_buffer[BUFFER_SIZE];
 
-    if (filename=="ls"){
-        DIR* d;
-        struct dirent* currentEntry;
-        struct stat fileInfo;
+    if (strcmp(filename, "ls") == 0 ){
         // Open the directory and check for error
-        d = opendir(dirname);
+        d = opendir(MP3_DIR);
         if (d == NULL) {
-            fprintf(stderr, "Could not open directory %s: %s\n", dirname, strerror(errno));
-            return EXIT_FAILURE;
+            fprintf(stderr, "Could not open MP3 directory: %s\n", strerror(errno));
+            local_status = 1;
+            return local_status;
         }
         currentEntry = readdir(d);
         // Iterate through all directory entries
@@ -387,32 +378,32 @@ int send_file(SSL *ssl, const char* filename) {
             currentEntry = readdir(d);
         }
     }
-    else{
-    inputDescriptor = open(filename, (O_RDONLY ));
-    // handle errors from opening
-    if (inputDescriptor == (-1)){
-        printf("send_file: Could not open input file %s\n",filename);
-        perror("send_file");
-        local_status = 1;
-        return local_status;
-    }
-    //loop through the read/write until whole file is done
-    while (bytesRead !=0) {
-        bytesRead = read(inputDescriptor, send_buffer, BUFFER_SIZE);
-        // handle errors from reading
-        if (bytesRead<0){
-            local_status = 2;
-            printf("server:send_file:could not read from file");
+    else {
+        inputDescriptor = open(filename, (O_RDONLY ));
+        // handle errors from opening
+        if (inputDescriptor == (-1)){
+            printf("send_file: Could not open input file %s\n",filename);
+            perror("send_file");
+            local_status = 1;
+            return local_status;
         }
-        bytesWritten = SSL_write(ssl, send_buffer, BUFFER_SIZE);
-        //handle errors from writing
-        if (bytesWritten < 0){
-            fprintf(stderr, "Server: Error writing to socket: %s\n", strerror(errno));
-            local_status = 3;
+        //loop through the read/write until whole file is done
+        while (bytesRead !=0) {
+            bytesRead = read(inputDescriptor, send_buffer, BUFFER_SIZE);
+            // handle errors from reading
+            if (bytesRead<0){
+                local_status = 2;
+                printf("server:send_file:could not read from file");
+            }
+            bytesWritten = SSL_write(ssl, send_buffer, BUFFER_SIZE);
+            //handle errors from writing
+            if (bytesWritten < 0){
+                fprintf(stderr, "Server: Error writing to socket: %s\n", strerror(errno));
+                local_status = 3;
+            }
         }
-
+        close(inputDescriptor);
     }
-    close(inputDescriptor);
     return local_status;
 }
 
@@ -430,26 +421,5 @@ int do_stat(char* filename) {
         else{
             return 0;
         }
-    }
-}
-
-// Lists the contents of the directory specified in the MP3_DIR configuration variable and
-int do_ls(char* dirname) {
-    DIR* d;
-    struct dirent* currentEntry;
-    struct stat fileInfo;
-    // Open the directory and check for error
-    d = opendir(dirname);
-    if (d == NULL) {
-        fprintf(stderr, "Could not open directory %s: %s\n", dirname, strerror(errno));
-        return EXIT_FAILURE;
-    }
-    currentEntry = readdir(d);
-    // Iterate through all directory entries
-    while(currentEntry != NULL) {
-        // Check to see if the item is a subdirectory
-        fprintf(stdout, "%-30s\n", currentEntry->d_name);
-        // Get the next directory entry
-        currentEntry = readdir(d);
     }
 }

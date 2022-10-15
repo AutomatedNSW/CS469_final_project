@@ -28,7 +28,6 @@ SYNOPSIS: This program is a small client application that establishes a secure
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
-
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -36,23 +35,25 @@ SYNOPSIS: This program is a small client application that establishes a secure
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
 #include <stdbool.h>
+
 #define DEFAULT_PORT        4433
 #define BACKUP_PORT         4434
 #define DEFAULT_HOST        "localhost"
-#define BACKUP_HOST        "localhost"
+#define BACKUP_HOST         "localhost"
 #define MAX_HOSTNAME_LENGTH 256
 #define BUFFER_SIZE         256
 #define MAX_FILENAME_LENGTH 250
-#define PASSWORD_LENGTH 32
-#define USERNAME_LENGTH 32
-#define HASH_LENGTH     264
-#define SEED_LENGTH     8
+#define PASSWORD_LENGTH     32
+#define USERNAME_LENGTH     32
+#define HASH_LENGTH         264
+#define SEED_LENGTH         8
 
 //Declare function prototypes
 int download_file(SSL *ssl, const char* filename);
 int listFiles(SSL *ssl);
+void getPassword(char* password);
 bool checkPassword (const char* password);// See answer @ https://stackoverflow.com/questions/10273414/library-for-passwords-salt-hash-in-c
-void setActiveServer(int* port,  const char* host); //This method should be called on pointers to int and char array, so that we can pass those variables into create_socket()
+int setActiveServer(); //this is a wrapper on create_socket that returns sockfd for the successful connection
 /******************************************************************************
 
 This function does the basic necessary housekeeping to establish a secure TCP
@@ -137,7 +138,8 @@ int main(int argc, char** argv) {
   int               total = 0;
   SSL_CTX*          ssl_ctx;
   SSL*              ssl;
-  //below is for password section
+  int               status;
+    //below is for password section
   char  bufferPW[USERNAME_LENGTH + HASH_LENGTH + 1];
   char  password[PASSWORD_LENGTH];
   char  username[USERNAME_LENGTH];
@@ -188,9 +190,9 @@ int main(int argc, char** argv) {
   // Create a new SSL connection state object
   ssl = SSL_new(ssl_ctx);
   // **** kaycee should insert her setActiveServer call here ***
-  setActiveServer(remote_host,port)
+
   // Create the underlying TCP socket connection to the remote host
-  sockfd = create_socket(remote_host, port);
+  sockfd = setActiveServer();
   if(sockfd != 0)
     fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", remote_host, port);
   else {
@@ -213,8 +215,7 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  int status;
-  
+
   // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
   while(1){
 	  const char *const seedchars = "./0123456789"
@@ -269,12 +270,11 @@ int main(int argc, char** argv) {
   
   
   //get filename from user
-  // **** Bryant Modify this section to either call listFiles() or download_file(), based on if buffer == "ls" or not
   while(1){
 	  printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
 	  fgets(buffer, BUFFER_SIZE-1, stdin);
 	  buffer[strlen(buffer)-1] = '\0';
-	  if(strcmp(buffer,"ls"){
+	  if(strcmp(buffer,"ls" == 0){
 		status = listFiles(ssl, buffer);
 		switch (status){
 			case 0:
@@ -282,7 +282,7 @@ int main(int argc, char** argv) {
 				break;
 			  // ******* TODO update ERROR messages **********
 			case 1:
-				printf("SERVER ERROR: Could not open requested file\n");
+				printf("SERVER ERROR: Could not open MP3 directory\n");
 				break;
 			case 2:
 				printf("SERVER ERROR: Opened, but could not read requested file\n");
@@ -432,40 +432,26 @@ int listFiles(SSL *ssl, const char* ls){
 }
 
 // Kaycee's code for setActiveServer
-void setActiveServer(int* port,  const char* host) {
-  int         port = DEFAULT_PORT;
-  int*        port_default;
-  char        host = DEFAULT_HOST;
-  const char* host_default; 
-
-  port_default = &port;
-  host_default = &host; 
-
+int setActiveServer() {
+  int sockfd;
   // Creates the underlying TCP socket connection to the remote host
-  sockfd = create_socket(host_default, port_default);
+  sockfd = create_socket(DEFAULT_HOST, DEFAULT_PORT);
 
   if(sockfd != 0)
-    fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", host_default, port_default);
+    fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", DEFAULT_HOST, DEFAULT_PORT);
 
   // The first attempt to connect did not succeed; tries the backup server
   else {
-    port2 = BACKUP_PORT;
-    int* port_backup;
-    host2 = BACKUP_HOST; 
-    const char* host_backup;
-
-    port_backup = &port2;
-    host_backup = &host2; 
-
-    printf("Trying backup server on port %u\n", port_backup);
-    sockfd = create_socket(host_backup, port_backup);
+    printf("Trying backup server on port %u\n", DEFAULT_PORT);
+    sockfd = create_socket(DEFAULT_HOST, DEFAULT_PORT);
     if(sockfd != 0)
-      fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", host_backup, port_backup);
+      fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", BACKUP_HOST, BACKUP_PORT);
     else {
-      fprintf(stderr, "Client: Could not establish TCP connection to %s on port %u\n", host_backup, port_backup);
+      fprintf(stderr, "Client: Could not establish TCP connection to %s on port %u\n", BACKUP_HOST, BACKUP_PORT);
       exit(EXIT_FAILURE);
     }
   }
+  return sockfd;
 }
 
 void getPassword(char* password) {
@@ -492,11 +478,11 @@ void getPassword(char* password) {
     tcsetattr(STDIN_FILENO, TCSANOW, &oldsettings);
 }
 
-int checkPassword(SSL *ssl, const char* UandP){
+bool checkPassword(SSL *ssl, const char* UandP){
 	int nbytes_written;
     int nbytes_read;
     int file_descriptor;
-    int status = 0;
+    bool status = false;
     int error_number;
     char request[BUFFER_SIZE];
     char local_buffer[BUFFER_SIZE];
