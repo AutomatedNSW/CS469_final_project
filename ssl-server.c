@@ -32,8 +32,9 @@ SYNOPSIS: This program is a small server application that receives incoming TCP
 #include <sys/socket.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <dirent.h>
 
-#define BUFFER_SIZE       256
+#define BUFFER_SIZE       512
 #define DEFAULT_PORT      4433
 #define CERTIFICATE_FILE  "cert.pem"
 #define KEY_FILE          "key.pem"
@@ -326,7 +327,7 @@ int main(int argc, char **argv) {
           printf("Requested path %s is a directory",filename);
       }
       if (status == 0){
-        status = send_file(ssl, filename);
+        status = response(ssl, filename);
       }
       if(status != 0){
           printf("ERROR: %d %s\n", status, buffer);
@@ -357,23 +358,30 @@ int response(SSL *ssl, const char* filename) {
     struct dirent* currentEntry;
     int inputDescriptor;
     int local_status = 0;
-    ssize_t bytesRead=1;
+    ssize_t bytesRead = 1;
     ssize_t bytesWritten;
     char send_buffer[BUFFER_SIZE];
+    char filedata[BUFFER_SIZE];
 
     if (strcmp(filename, "ls") == 0 ){
         // Open the directory and check for error
         d = opendir(MP3_DIR);
         if (d == NULL) {
             fprintf(stderr, "Could not open MP3 directory: %s\n", strerror(errno));
-            local_status = 1;
+            local_status = 10;
             return local_status;
         }
         currentEntry = readdir(d);
         // Iterate through all directory entries
         while(currentEntry != NULL) {
             // Check to see if the item is a subdirectory
-            fprintf(stdout, "%-30s\n", currentEntry->d_name);
+            sprintf(filedata, "%s\n", currentEntry->d_name);
+            bytesWritten = SSL_write(ssl, send_buffer, BUFFER_SIZE);
+            //handle errors from writing
+            if (bytesWritten < 0){
+                fprintf(stderr, "Server: Error writing to socket: %s\n", strerror(errno));
+                local_status = 3;
+            }
             // Get the next directory entry
             currentEntry = readdir(d);
         }
@@ -382,8 +390,8 @@ int response(SSL *ssl, const char* filename) {
         inputDescriptor = open(filename, (O_RDONLY ));
         // handle errors from opening
         if (inputDescriptor == (-1)){
-            printf("send_file: Could not open input file %s\n",filename);
-            perror("send_file");
+            printf("response: Could not open input file %s\n",filename);
+            perror("response");
             local_status = 1;
             return local_status;
         }
@@ -393,7 +401,7 @@ int response(SSL *ssl, const char* filename) {
             // handle errors from reading
             if (bytesRead<0){
                 local_status = 2;
-                printf("server:send_file:could not read from file");
+                printf("Server:response:could not read from file");
             }
             bytesWritten = SSL_write(ssl, send_buffer, BUFFER_SIZE);
             //handle errors from writing
@@ -411,7 +419,7 @@ int response(SSL *ssl, const char* filename) {
 int do_stat(char* filename) {
     struct stat    fileInfo;
     if (stat(filename, &fileInfo) < 0){
-        fprintf(stderr, "stat: %s: %s\n", filename, strerror(errno));
+        fprintf(stderr, "do_stat: %s: %s\n", filename, strerror(errno));
         return -1;
     }
     else{

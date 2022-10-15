@@ -41,7 +41,7 @@ SYNOPSIS: This program is a small client application that establishes a secure
 #define DEFAULT_HOST        "localhost"
 #define BACKUP_HOST         "localhost"
 #define MAX_HOSTNAME_LENGTH 256
-#define BUFFER_SIZE         256
+#define BUFFER_SIZE         512
 #define MAX_FILENAME_LENGTH 250
 #define PASSWORD_LENGTH     32
 #define USERNAME_LENGTH     32
@@ -145,7 +145,6 @@ int main(int argc, char** argv) {
   char  username[USERNAME_LENGTH];
   char  hash[HASH_LENGTH];
 
-  // *******************   this section might need to go away. From here... ******************
   if (argc != 2) {
     fprintf(stderr, "Client: Usage: ssl-client <server name>:<port>\n");
     exit(EXIT_FAILURE);
@@ -164,7 +163,6 @@ int main(int argc, char** argv) {
       port = (unsigned int) atoi(temp_ptr+sizeof(char));
     }
   }
-    // ******************************* ...down to here ***********************************
   // Initialize OpenSSL ciphers and digests
   OpenSSL_add_all_algorithms();
 
@@ -217,122 +215,89 @@ int main(int argc, char** argv) {
 
 
   // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
-  while(1){
-	  const char *const seedchars = "./0123456789"
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz";
-	  unsigned long int seed[2];
-		
-	  //"$5$ selects the SHA256 algorithm. The
-	  // length of this char array is the seed length plus 3 to account for 
-	  // the identifier and two '$" separators
-	  char salt[] = "$5$........";
+    const char *const seedchars = "./0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz";
+    unsigned long int seed[2];
 
-	  // Generate a (not very) random seed.
-	  seed[0] = time(NULL);
-	  seed[1] = getpid() ^ (seed[0] >> 14 & 0x30000);
+    //"$5$ selects the SHA256 algorithm. The
+    // length of this char array is the seed length plus 3 to account for
+    // the identifier and two '$" separators
+    char salt[] = "$5$........";
 
-	  // Convert the salt into printable characters from the seedchars string
-	  for (int i = 0; i < 8; i++)
-		salt[3+i] = seedchars[(seed[i/5] >> (i%5)*6) & 0x3f];
+    // Generate a (not very) random seed.
+    seed[0] = time(NULL);
+    seed[1] = getpid() ^ (seed[0] >> 14 & 0x30000);
 
-	  // Enter the username that will be stored with the hash
-	  fprintf(stdout, "Enter username: ");
-	  fgets(username, USERNAME_LENGTH, stdin);
-	  username[strlen(username)-1] = '\0';
+    // Convert the salt into printable characters from the seedchars string
+    for (int i = 0; i < 8; i++)
+    salt[3+i] = seedchars[(seed[i/5] >> (i%5)*6) & 0x3f];
 
-	  // Enter the password
-	  fprintf(stdout, "Enter password: ");
-	  getPassword(password);
-	  
-	  // Now we create a cryptographic hash of the password with the SHA256
-	  // algorithm using the generated salt string
-	  strncpy(hash, crypt(password, salt), HASH_LENGTH);
+    // Enter the username that will be stored with the hash
+    fprintf(stdout, "Enter username: ");
+    fgets(username, USERNAME_LENGTH, stdin);
+    username[strlen(username)-1] = '\0';
 
-	  // Let's just get rid of that password since we're done with it
-	  bzero(password, PASSWORD_LENGTH);
+    // Enter the password
+    fprintf(stdout, "Enter password: ");
+    getPassword(password);
 
-	  fprintf(stdout, "\n");
-	  
-	  sprintf(bufferPW, "%s,%s\n", username, hash);
-	  
-	  //send username and password to server which will read from a file and compare. After comparing send back 0 for matching
-	  status = checkPassword(ssl, bufferPW);
-	  
-	  if(status = 0){
-		printf("Username & Password Accepted\n");
-		status = null;
-		exit();
-	  }
-	  else{
-		printf("Invalid Username or Password\n");
-	  }
-  }
+    // Now we create a cryptographic hash of the password with the SHA256
+    // algorithm using the generated salt string
+    strncpy(hash, crypt(password, salt), HASH_LENGTH);
+
+    // Let's just get rid of that password since we're done with it
+    bzero(password, PASSWORD_LENGTH);
+
+    fprintf(stdout, "\n");
+
+    sprintf(bufferPW, "%s,%s\n", username, hash);
+
+    //send username and password to server which will read from a file and compare. After comparing send back 0 for matching
+    status = checkPassword(ssl, bufferPW);
+
+    if(status = 0){
+    printf("Username & Password Accepted\n");
+    status = null;
+    exit();
+    }
+    else{
+    printf("Invalid Username or Password\n");
+    }
   
   
-  //get filename from user
-  while(1){
-	  printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
-	  fgets(buffer, BUFFER_SIZE-1, stdin);
-	  buffer[strlen(buffer)-1] = '\0';
-	  if(strcmp(buffer,"ls" == 0){
-		status = listFiles(ssl, buffer);
-		switch (status){
-			case 0:
-				printf("%s downloaded\n", buffer);
-				break;
-			  // ******* TODO update ERROR messages **********
-			case 1:
-				printf("SERVER ERROR: Could not open MP3 directory\n");
-				break;
-			case 2:
-				printf("SERVER ERROR: Opened, but could not read requested file\n");
-				break;
-			case 3:
-				printf("SERVER ERROR: Server could not write to socket during file transmission\n");
-				break;
-			case 4:
-				printf("RPC ERROR, invalid command\n");
-				break;
-			case 5:
-				printf("RPC ERROR, requested path is a directory, not a file\n");
-				break;
-			case 6:
-				printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
-				break;
-			default:
-				printf("Undefined Error Code: %d\n", status);
+    //get filename from user
+    printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
+    fgets(buffer, BUFFER_SIZE-1, stdin);
+    buffer[strlen(buffer)-1] = '\0';
+    status = download_file(ssl, buffer);
+    switch (status){
+        case 0:
+            printf("%s downloaded\n", buffer);
+            exit();
+          // ******* TODO update ERROR messages **********
+        case 1:
+            printf("SERVER ERROR: Could not open requested file\n");
+            break;
+        case 2:
+            printf("SERVER ERROR: Opened, but could not read requested file\n");
+            break;
+        case 3:
+            printf("SERVER ERROR: Server could not write to socket during file transmission\n");
+            break;
+        case 4:
+            printf("RPC ERROR, invalid command\n");
+            break;
+        case 5:
+            printf("RPC ERROR, requested path is a directory, not a file\n");
+            break;
+        case 6:
+            printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
+            break;
+        case 10:
+            printf("SERVER ERROR: Could not open MP3 directory\n");
+        default:
+            printf("Undefined Error Code: %d\n", status);
 		}
-		
-	  }
-	  else {
-		status = download_file(ssl, buffer);
-		switch (status){
-			case 0:
-				printf("%s downloaded\n", buffer);
-				exit();
-			  // ******* TODO update ERROR messages **********
-			case 1:
-				printf("SERVER ERROR: Could not open requested file\n");
-				break;
-			case 2:
-				printf("SERVER ERROR: Opened, but could not read requested file\n");
-				break;
-			case 3:
-				printf("SERVER ERROR: Server could not write to socket during file transmission\n");
-				break;
-			case 4:
-				printf("RPC ERROR, invalid command\n");
-				break;
-			case 5:
-				printf("RPC ERROR, requested path is a directory, not a file\n");
-				break;
-			case 6:
-				printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
-				break;
-			default:
-				printf("Undefined Error Code: %d\n", status);
-		}
-	  }
   }
 
   // Deallocate memory for the SSL data structures and close the socket
