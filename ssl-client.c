@@ -68,7 +68,6 @@ int create_socket(char* hostname, unsigned int port) {
   host = gethostbyname(hostname);
   if (host == NULL) {
     fprintf(stderr, "Client: Cannot resolve hostname %s\n",  hostname);
-    exit(EXIT_FAILURE);
   }
 
   // Create a socket (endpoint) for network communication.  The socket()
@@ -80,7 +79,6 @@ int create_socket(char* hostname, unsigned int port) {
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0) {
     fprintf(stderr, "Server: Unable to create socket: %s", strerror(errno));
-    exit(EXIT_FAILURE);
   }
 
   // First we set up a network socket. An IP socket address is a combination
@@ -102,7 +100,7 @@ int create_socket(char* hostname, unsigned int port) {
 	      sizeof(struct sockaddr)) <0) {
     fprintf(stderr, "Client: Cannot connect to host %s [%s] on port %d: %s\n",
 	    hostname, inet_ntoa(dest_addr.sin_addr), port, strerror(errno));
-    exit(EXIT_FAILURE);
+    sockfd=-1;
   }
 
   return sockfd;
@@ -145,24 +143,6 @@ int main(int argc, char** argv) {
   char  username[USERNAME_LENGTH];
   char  hash[HASH_LENGTH];
 
-  if (argc != 2) {
-    fprintf(stderr, "Client: Usage: ssl-client <server name>:<port>\n");
-    exit(EXIT_FAILURE);
-  } else {
-    // Search for ':' in the argument to see if port is specified
-    temp_ptr = strchr(argv[1], ':');
-    if (temp_ptr == NULL)    // Hostname only. Use default port
-      strncpy(remote_host, argv[1], MAX_HOSTNAME_LENGTH);
-    else {
-      // Argument is formatted as <hostname>:<port>. Need to separate
-      // First, split out the hostname from port, delineated with a colon
-      // remote_host will have the <hostname> substring
-      strncpy(remote_host, strtok(argv[1], ":"), MAX_HOSTNAME_LENGTH);
-      // Port number will be the substring after the ':'. At this point
-      // temp is a pointer to the array element containing the ':'
-      port = (unsigned int) atoi(temp_ptr+sizeof(char));
-    }
-  }
   // Initialize OpenSSL ciphers and digests
   OpenSSL_add_all_algorithms();
 
@@ -191,13 +171,6 @@ int main(int argc, char** argv) {
 
   // Create the underlying TCP socket connection to the remote host
   sockfd = setActiveServer();
-  if(sockfd != 0)
-    fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", remote_host, port);
-  else {
-    fprintf(stderr, "Client: Could not establish TCP connection to %s on port %u\n", remote_host, port);
-    exit(EXIT_FAILURE);
-  }
-
   // Bind the SSL object to the network socket descriptor. The socket descriptor
   // will be used by OpenSSL to communicate with a server. This function should
   // only be called once the TCP connection is established, i.e., after
@@ -207,9 +180,9 @@ int main(int argc, char** argv) {
   // Initiates an SSL session over the existing socket connection. SSL_connect()
   // will return 1 if successful.
   if (SSL_connect(ssl) == 1)
-    printf("Client: Established SSL/TLS session to '%s' on port %u\n", remote_host, port);
+    printf("Client: Established SSL/TLS session to server\n");
   else {
-    fprintf(stderr, "Client: Could not establish SSL session to '%s' on port %u\n", remote_host, port);
+    fprintf(stderr, "Client: Could not establish SSL session to server\n");
     exit(EXIT_FAILURE);
   }
 
@@ -266,15 +239,14 @@ int main(int argc, char** argv) {
   
   */
     //get filename from user
-    printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
+    printf("Please enter filename to request from server (filename must not have spaces)\n, or type 'ls' to receive a list of available files: ");
     fgets(buffer, BUFFER_SIZE-1, stdin);
     buffer[strlen(buffer)-1] = '\0';
     status = download_file(ssl, buffer);
     switch (status){
         case 0:
             printf("%s downloaded\n", buffer);
-            exit();
-          // ******* TODO update ERROR messages **********
+            break;
         case 1:
             printf("SERVER ERROR: Could not open requested file\n");
             break;
@@ -282,7 +254,7 @@ int main(int argc, char** argv) {
             printf("SERVER ERROR: Opened, but could not read requested file\n");
             break;
         case 3:
-            printf("SERVER ERROR: Server could not write to socket during file transmission\n");
+            printf("CLIENT ERROR: Server could not write to socket during file transmission\n");
             break;
         case 4:
             printf("RPC ERROR, invalid command\n");
@@ -293,61 +265,75 @@ int main(int argc, char** argv) {
         case 6:
             printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
             break;
+        case 7:
+            printf("CLIENT ERROR: Could not read from socket\n");
+            break;
         case 10:
             printf("SERVER ERROR: Could not open MP3 directory\n");
+            break;
         default:
             printf("Undefined Error Code: %d\n", status);
+            break;
 		}
-  }
 
-  // Deallocate memory for the SSL data structures and close the socket
-  SSL_free(ssl);
-  SSL_CTX_free(ssl_ctx);
-  close(sockfd);
-  printf("Client: Terminated SSL/TLS connection with server '%s'\n",
-	 remote_host);
+    // Deallocate memory for the SSL data structures and close the socket
+    SSL_free(ssl);
+    SSL_CTX_free(ssl_ctx);
+    close(sockfd);
+    printf("Client: Terminated SSL/TLS connection with server '%s'\n",
+     remote_host);
 
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 int download_file(SSL *ssl, const char* filename){
     int nbytes_written;
     int nbytes_read;
     int file_descriptor;
-    int status = 0;
-    int error_number;
+    int error_number = 0;
     char request[BUFFER_SIZE];
     char local_buffer[BUFFER_SIZE];
-    bool file_complete = false;
+    bool transfer_complete = false;
 
     sprintf(request,"GET: %s", filename); //append user-input filepath to appropriate request type (in order to test RPC format error detection, change to something other than GET and build/run)
     nbytes_written = SSL_write(ssl,request,BUFFER_SIZE);//send request to server
-    if (nbytes_written < 0)
+    if (nbytes_written < 0){
         fprintf(stderr, "Client: Error writing to socket: %s\n", strerror(errno));
+        error_number=3;
+    }
     else {
-        file_descriptor = open(filename, O_CREAT|O_RDWR,(mode_t)0644);
-        while (file_complete==false) {
+        if(strcmp(filename,"ls") == 0){
+            file_descriptor = 1; //stdout
+        }
+        else{
+            file_descriptor = open(filename, O_CREAT|O_RDWR,(mode_t)0644);
+        }
+        while (transfer_complete == false) {
             nbytes_read = SSL_read(ssl, local_buffer, BUFFER_SIZE);
-            if (nbytes_read < 0)
-                fprintf(stderr, "Server: Error reading from socket: %s\n", strerror(errno));
-            else if (nbytes_read == 0) {
-                printf("Connection Terminated by Server\n");
-                file_complete = true;
+            if (nbytes_read < 0){
+                fprintf(stderr, "Client: Error reading from socket: %s\n", strerror(errno));
+                error_number = 7;
             }
-            else {
-                error_number = sscanf(local_buffer, "ERROR: %d", &status);
+            else{
+                if (nbytes_read == 0) {
+                    printf("\n***Request Complete - Connection Terminated by Server***\n");
+                    transfer_complete = true;
+                }
+                sscanf(local_buffer, "ERROR: %d", &error_number);
                 if (error_number == 0){
                     write(file_descriptor, local_buffer, BUFFER_SIZE);
                 }
                 else{
-                    file_complete = true;
+                    transfer_complete = true;
                 }
             }
             bzero(local_buffer, BUFFER_SIZE);
         }
-        close(file_descriptor);
+        if(strcmp(filename,"ls") == 0){
+            close(file_descriptor);
+        }
     }
-    return status;
+    return error_number;
 }
 /*
 int listFiles(SSL *ssl, const char* ls){
@@ -401,15 +387,13 @@ int setActiveServer() {
   int sockfd;
   // Creates the underlying TCP socket connection to the remote host
   sockfd = create_socket(DEFAULT_HOST, DEFAULT_PORT);
-
-  if(sockfd != 0)
+  if(sockfd > 0)
     fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", DEFAULT_HOST, DEFAULT_PORT);
-
   // The first attempt to connect did not succeed; tries the backup server
   else {
     printf("Trying backup server on port %u\n", DEFAULT_PORT);
-    sockfd = create_socket(DEFAULT_HOST, DEFAULT_PORT);
-    if(sockfd != 0)
+    sockfd = create_socket(BACKUP_HOST, BACKUP_PORT);
+    if(sockfd > 0)
       fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", BACKUP_HOST, BACKUP_PORT);
     else {
       fprintf(stderr, "Client: Could not establish TCP connection to %s on port %u\n", BACKUP_HOST, BACKUP_PORT);

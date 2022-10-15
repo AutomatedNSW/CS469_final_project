@@ -261,6 +261,12 @@ int main(int argc, char **argv) {
     struct sockaddr_in addr;
     unsigned int       len = sizeof(addr);
     char               client_addr[INET_ADDRSTRLEN];
+    int nbytes_read;
+    char filename[BUFFER_SIZE];
+    char dummy[BUFFER_SIZE];
+    int status = 0;
+    int arguments;
+
 
     // Once an incoming connection arrives, accept it.  If this is successful,
     // we now have a connection between client and server and can communicate
@@ -293,55 +299,54 @@ int main(int argc, char **argv) {
     if (SSL_accept(ssl) <= 0) {
       fprintf(stderr, "Server: Could not establish secure connection:\n");
       ERR_print_errors_fp(stderr);
-    } else {
-      printf("Server: Established SSL/TLS connection with client (%s)\n",
-	     client_addr);
-
-      // ***********************************************************************
-      int nbytes_read;
-      char filename[BUFFER_SIZE];
-      char dummy[BUFFER_SIZE];
-      int status = 0;
-      int arguments;
-
-      nbytes_read = SSL_read(ssl,buffer,BUFFER_SIZE);
-      if (nbytes_read < 0)
+    }
+    else {
+        printf("Server: Established SSL/TLS connection with client (%s)\n",
+             client_addr);
+        nbytes_read = SSL_read(ssl,buffer,BUFFER_SIZE);
+        if (nbytes_read < 0){
           fprintf(stderr, "Server: Error reading from socket: %s\n", strerror(errno));
-      else{
+        }
+        else{
           printf("Server: Message received from client: \"%s\"\n", buffer);
           arguments = sscanf(buffer,"GET: %s %s", filename, dummy);
-          if (arguments>1){
+          if (arguments > 1){
             status = 6;
             printf("RPC Error: Too many arguments provided\n");
           }
           else{
             arguments = sscanf(buffer,"GET: %s", filename);
           }
-      }
-      if(arguments==0){
+        }
+        if(arguments == 0){
         status = 4;
         printf("RPC Error: Unknown Command");
-      }
-      else if(do_stat(filename)==1){
-          status=5;
-          printf("Requested path %s is a directory",filename);
-      }
-      if (status == 0){
-        status = response(ssl, filename);
-      }
-      if(status != 0){
+        }
+        else{
+          if(do_stat(filename) == 1){
+              status = 5;
+              printf("Requested path %s is a directory",filename);
+          }
+        }
+        // No errors detected, provide response
+        if (status == 0){
+            printf("\nrunning response() %d\n",status);
+            status = response(ssl, filename);
+        }
+        else{
+          printf("didn't run response() due to status \n\n%d\n\n",status);
           printf("ERROR: %d %s\n", status, buffer);
           sprintf(buffer, "ERROR: %d", status);
           SSL_write(ssl, buffer, BUFFER_SIZE);
-      }
-      bzero(buffer, BUFFER_SIZE);
-      // File transfer complete
-      printf("Server: Completed file transfer to client (%s)\n", client_addr);
-      // Terminate the SSL session, close the TCP connection, and clean up
-      printf("Server: Terminating SSL session and TCP connection with client (%s)\n",
+        }
+        bzero(buffer, BUFFER_SIZE);
+        // File transfer complete
+        printf("Server: Completed file transfer to client (%s)\n", client_addr);
+        // Terminate the SSL session, close the TCP connection, and clean up
+        printf("Server: Terminating SSL session and TCP connection with client (%s)\n",
              client_addr);
-      SSL_free(ssl);
-      close(client);
+        SSL_free(ssl);
+        close(client);
     }
     // Tear down and clean up server data structures before terminating
     SSL_CTX_free(ssl_ctx);
@@ -362,6 +367,7 @@ int response(SSL *ssl, const char* filename) {
     ssize_t bytesWritten;
     char send_buffer[BUFFER_SIZE];
     char filedata[BUFFER_SIZE];
+    char* filepath;
 
     if (strcmp(filename, "ls") == 0 ){
         // Open the directory and check for error
@@ -375,8 +381,8 @@ int response(SSL *ssl, const char* filename) {
         // Iterate through all directory entries
         while(currentEntry != NULL) {
             // Check to see if the item is a subdirectory
-            sprintf(filedata, "%s\n", currentEntry->d_name);
-            bytesWritten = SSL_write(ssl, send_buffer, BUFFER_SIZE);
+            sprintf(filedata, "%-510s\n", currentEntry->d_name);
+            bytesWritten = SSL_write(ssl, filedata, BUFFER_SIZE);
             //handle errors from writing
             if (bytesWritten < 0){
                 fprintf(stderr, "Server: Error writing to socket: %s\n", strerror(errno));
@@ -387,7 +393,9 @@ int response(SSL *ssl, const char* filename) {
         }
     }
     else {
-        inputDescriptor = open(filename, (O_RDONLY ));
+        sprintf(filepath,"./%s/%s",MP3_DIR,filename);
+        printf(filepath);
+        inputDescriptor = open(filepath, (O_RDONLY ));
         // handle errors from opening
         if (inputDescriptor == (-1)){
             printf("response: Could not open input file %s\n",filename);

@@ -6,7 +6,7 @@ ifeq ($(UNAME), Darwin)
 CFLAGS := -I/usr/local/opt/openssl/include -L/usr/local/opt/openssl/lib
 endif
 
-all: ssl-client ssl-server
+all: ssl-client ssl-server server-backup
 
 ssl-client: ssl-client.o
 	$(CC) $(CFLAGS) -o ssl-client ssl-client.o $(LDFLAGS)
@@ -20,5 +20,11 @@ ssl-server: ssl-server.o
 ssl-server.o: ssl-server.c
 	$(CC) $(CFLAGS) -c ssl-server.c
 
+server-backup: server-backup.o
+	$(CC) $(CFLAGS) -o server-backup server-backup.o $(LDFLAGS)
+
+server-backup.o: server-backup.c
+	$(CC) $(CFLAGS) -c server-backup.c
+
 clean:
-	rm -f ssl-server ssl-server.o ssl-client ssl-client.o
+	rm -f ssl-server ssl-server.o ssl-client ssl-client.o server-backup server-backup.o
