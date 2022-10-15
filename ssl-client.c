@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-
+    /*
   // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
     const char *const seedchars = "./0123456789"
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz";
@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
     printf("Invalid Username or Password\n");
     }
   
-  
+  */
     //get filename from user
     printf("Please enter filename to request from server (filename must not have spaces), or type 'ls' to receive a list of available files: ");
     fgets(buffer, BUFFER_SIZE-1, stdin);
@@ -349,7 +349,7 @@ int download_file(SSL *ssl, const char* filename){
     }
     return status;
 }
-
+/*
 int listFiles(SSL *ssl, const char* ls){
     //int status = 0;
     //int error_number;
@@ -395,7 +395,7 @@ int listFiles(SSL *ssl, const char* ls){
     }
     return status;
 }
-
+*/
 // Kaycee's code for setActiveServer
 int setActiveServer() {
   int sockfd;
@@ -418,7 +418,7 @@ int setActiveServer() {
   }
   return sockfd;
 }
-
+/*
 void getPassword(char* password) {
     static struct termios oldsettings, newsettings;
     int c, i = 0;
@@ -482,3 +482,4 @@ bool checkPassword(SSL *ssl, const char* UandP){
     }
     return status;
 }
+*/
