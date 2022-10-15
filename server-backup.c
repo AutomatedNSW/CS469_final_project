@@ -323,18 +323,18 @@ int main(int argc, char **argv) {
                 printf("RPC Error: Unknown Command");
             }
             else{
-                if(do_stat(filename) == 1){
-                    status = 5;
-                    printf("Requested path %s is a directory",filename);
+                if (strcmp(filename,"ls") != 0) {
+                    if (do_stat(filename) == 1) {
+                        status = 5;
+                        printf("Requested path %s is a directory", filename);
+                    }
                 }
             }
             // No errors detected, provide response
             if (status == 0){
-                printf("\nrunning response() %d\n",status);
                 status = response(ssl, filename);
             }
             else{
-                printf("didn't run response() due to status \n\n%d\n\n",status);
                 printf("ERROR: %d %s\n", status, buffer);
                 sprintf(buffer, "ERROR: %d", status);
                 SSL_write(ssl, buffer, BUFFER_SIZE);
@@ -394,7 +394,6 @@ int response(SSL *ssl, const char* filename) {
     }
     else {
         sprintf(filepath,"./%s/%s",MP3_DIR,filename);
-        printf(filepath);
         inputDescriptor = open(filepath, (O_RDONLY ));
         // handle errors from opening
         if (inputDescriptor == (-1)){
