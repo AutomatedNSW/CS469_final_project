@@ -1,7 +1,7 @@
 /******************************************************************************
 
 PROGRAM:  ssl-server.c
-AUTHOR:   ***** Lincoln Lorscheider *****
+AUTHOR:   ***** Lincoln Lorscheider, Kaycee Valdez, Bryant Hanks *****
 COURSE:   CS469 - Distributed Systems (Regis University)
 SYNOPSIS: This program is a small server application that receives incoming TCP
           connections from clients and transfers a requested file from the
@@ -37,10 +37,12 @@ SYNOPSIS: This program is a small server application that receives incoming TCP
 #define DEFAULT_PORT      4433
 #define CERTIFICATE_FILE  "cert.pem"
 #define KEY_FILE          "key.pem"
+#define MP3_DIR           "mp3"
 
 //declare function prototype
 int send_file(SSL *ssl, const char* filename);
 int do_stat(char* filename);
+int do_ls(const char* dirname);
 /******************************************************************************
 
 This function does the basic necessary housekeeping to establish TCP connections
@@ -295,7 +297,6 @@ int main(int argc, char **argv) {
 	     client_addr);
 
       // ***********************************************************************
-      // YOUR CODE HERE
       int nbytes_read;
       char filename[BUFFER_SIZE];
       char dummy[BUFFER_SIZE];
@@ -325,7 +326,12 @@ int main(int argc, char **argv) {
           printf("Requested path %s is a directory",filename);
       }
       if (status==0){
+          if(&& filename != "ls"){
         status = send_file(ssl, filename);
+          }
+          else{
+              status = do_ls(ssl);
+          }
       }
       if(status!=0){
           printf("ERROR: %d %s\n", status, buffer);
@@ -362,6 +368,26 @@ int send_file(SSL *ssl, const char* filename) {
     ssize_t bytesWritten;
     char send_buffer[BUFFER_SIZE];
 
+    if (filename=="ls"){
+        DIR* d;
+        struct dirent* currentEntry;
+        struct stat fileInfo;
+        // Open the directory and check for error
+        d = opendir(dirname);
+        if (d == NULL) {
+            fprintf(stderr, "Could not open directory %s: %s\n", dirname, strerror(errno));
+            return EXIT_FAILURE;
+        }
+        currentEntry = readdir(d);
+        // Iterate through all directory entries
+        while(currentEntry != NULL) {
+            // Check to see if the item is a subdirectory
+            fprintf(stdout, "%-30s\n", currentEntry->d_name);
+            // Get the next directory entry
+            currentEntry = readdir(d);
+        }
+    }
+    else{
     inputDescriptor = open(filename, (O_RDONLY ));
     // handle errors from opening
     if (inputDescriptor == (-1)){
@@ -404,5 +430,26 @@ int do_stat(char* filename) {
         else{
             return 0;
         }
+    }
+}
+
+// Lists the contents of the directory specified in the MP3_DIR configuration variable and
+int do_ls(char* dirname) {
+    DIR* d;
+    struct dirent* currentEntry;
+    struct stat fileInfo;
+    // Open the directory and check for error
+    d = opendir(dirname);
+    if (d == NULL) {
+        fprintf(stderr, "Could not open directory %s: %s\n", dirname, strerror(errno));
+        return EXIT_FAILURE;
+    }
+    currentEntry = readdir(d);
+    // Iterate through all directory entries
+    while(currentEntry != NULL) {
+        // Check to see if the item is a subdirectory
+        fprintf(stdout, "%-30s\n", currentEntry->d_name);
+        // Get the next directory entry
+        currentEntry = readdir(d);
     }
 }

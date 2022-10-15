@@ -276,12 +276,10 @@ int main(int argc, char** argv) {
 	  buffer[strlen(buffer)-1] = '\0';
 	  if(strcmp(buffer,"ls"){
 		status = listFiles(ssl, buffer);
-		//status = download_file(ssl, buffer);
 		switch (status){
 			case 0:
 				printf("%s downloaded\n", buffer);
 				break;
-				//break;
 			  // ******* TODO update ERROR messages **********
 			case 1:
 				printf("SERVER ERROR: Could not open requested file\n");
@@ -307,14 +305,11 @@ int main(int argc, char** argv) {
 		
 	  }
 	  else {
-  
-		  // ****
 		status = download_file(ssl, buffer);
 		switch (status){
 			case 0:
 				printf("%s downloaded\n", buffer);
 				exit();
-				//break;
 			  // ******* TODO update ERROR messages **********
 			case 1:
 				printf("SERVER ERROR: Could not open requested file\n");
@@ -351,7 +346,6 @@ int main(int argc, char** argv) {
 }
 
 int download_file(SSL *ssl, const char* filename){
-    // **** TODO Bryant modify this method as necessary to receive mp3s. The error code mapping in main() will also need to get updated
     int nbytes_written;
     int nbytes_read;
     int file_descriptor;
@@ -392,7 +386,6 @@ int download_file(SSL *ssl, const char* filename){
 }
 
 int listFiles(SSL *ssl, const char* ls){
-    // **** TODO Bryant modify this method as necessary to print the file list to console. The error code mapping in main() will also need to get updated. It should probably get it's own
     //int status = 0;
     //int error_number;
     //char request[BUFFER_SIZE];
