@@ -324,16 +324,14 @@ bool checkPassword(char* userInput) {
     char buffer[BUFFER_SIZE];
     bool authenticated = false;
     int fd;
-    ssize_t bytesRead=0;
+    int bytesRead=0;
 
-    encrypt(userInput, hashed_input);
-    fd = open("pwd", (O_RDONLY ));
-    while (bytesRead !=0) {
-        bytesRead = read(fd, buffer, BUFFER_SIZE);
-        if (bytesRead<0){
-            perror("checkPassword");
-        }
+    sprintf(hashed_input,"%s",encrypt(userInput, hashed_input));
+    fd = open("passwd", O_RDONLY);
+    while ((bytesRead = read(fd, buffer, BUFFER_SIZE) > 0)) {
+	    write(fd, buffer, bytesRead);
     }
+
     if(strcmp(hashed_input,buffer)==0){
         authenticated = true;
     }
@@ -351,6 +349,10 @@ char* encrypt(char *input, char output[65]){
     SHA256_Init(&SHAbuffer);
     SHA256_Update(&SHAbuffer, input, sizeof(input));
     SHA256_Final(hash, &SHAbuffer);
+
+    for(int i = 0; i< SHA256_DIGEST_LENGTH; i++){
+		sprintf(output + (i * 2), "%02x", hash[i]);
+    }
     return output;
 }
 
