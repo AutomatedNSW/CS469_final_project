@@ -348,11 +348,7 @@ int main(int argc, char **argv) {
         SSL_free(ssl);
         close(client);
     }
-    // Tear down and clean up server data structures before terminating
-    SSL_CTX_free(ssl_ctx);
-    cleanup_openssl();
-    close(sockfd);
-    return EXIT_SUCCESS;
+
   }
 #pragma clang diagnostic pop
 }
