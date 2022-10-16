@@ -17,6 +17,6 @@
 4. run ./ssl-client
 5. enter the password (which is the word password, in all lower case)
 6. type "ls" to get a list of all the files in the mp3 directory
-7. to download a file, type the filename (including the extension) after the client prompt
+7. to download a file, type the filename (including the extension) after the client prompt (for example: Hound_Dog-Big_Mama_Thornton.mp3 )
 8. Each client connection closes after a single server response
 9. The requested file will be downloaded to the working directory of ssl-client
