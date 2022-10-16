@@ -163,88 +163,88 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Unable to create a new SSL context structure.\n");
     exit(EXIT_FAILURE);
   }
-
-  // This disables SSLv2, which means only SSLv3 and TLSv1 are available
-  // to be negotiated between client and server
-  SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SSLv2);
-  // Create a new SSL connection state object
-  ssl = SSL_new(ssl_ctx);
-  // **** kaycee should insert her setActiveServer call here ***
-
-  // Create the underlying TCP socket connection to the remote host
-  sockfd = setActiveServer();
-  // Bind the SSL object to the network socket descriptor. The socket descriptor
-  // will be used by OpenSSL to communicate with a server. This function should
-  // only be called once the TCP connection is established, i.e., after
-  // create_socket()
-  SSL_set_fd(ssl, sockfd);
-
-  // Initiates an SSL session over the existing socket connection. SSL_connect()
-  // will return 1 if successful.
-  if (SSL_connect(ssl) == 1)
-    printf("Client: Established SSL/TLS session to server\n");
-  else {
-    fprintf(stderr, "Client: Could not establish SSL session to server\n");
-    exit(EXIT_FAILURE);
-  }
-
-  // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
+    // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
     printf("\nPlease enter password:\n");
     fgets(buffer, BUFFER_SIZE-1, stdin);
     buffer[strlen(buffer)-1] = '\0';
     //send username and password to server which will read from a file and compare. After comparing send back 0 for matching
-    printf("\n\nPassword check is %d\n",checkPassword(buffer));
+
     if( !checkPassword(bufferPW) ){
+        printf("\nPassword check has failed!\n");
         exit(EXIT_FAILURE);
-     }
+        return -1;
+    }
+    else {
+        printf("\nPassword Accepted!\n");
 
-  
+        // This disables SSLv2, which means only SSLv3 and TLSv1 are available
+        // to be negotiated between client and server
+        SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_SSLv2);
+        // Create a new SSL connection state object
+        ssl = SSL_new(ssl_ctx);
+        // **** kaycee should insert her setActiveServer call here ***
 
-    //get filename from user
-    printf("Please enter filename to request from server (filename must not have spaces)\n, or type 'ls' to receive a list of available files: ");
-    fgets(buffer, BUFFER_SIZE-1, stdin);
-    buffer[strlen(buffer)-1] = '\0';
-    status = download_file(ssl, buffer);
-    switch (status){
-        case 0:
-            printf("%s downloaded\n", buffer);
-            break;
-        case 1:
-            printf("SERVER ERROR: Could not open requested file\n");
-            break;
-        case 2:
-            printf("SERVER ERROR: Opened, but could not read requested file\n");
-            break;
-        case 3:
-            printf("CLIENT ERROR: Server could not write to socket during file transmission\n");
-            break;
-        case 4:
-            printf("RPC ERROR, invalid command\n");
-            break;
-        case 5:
-            printf("RPC ERROR, requested path is a directory, not a file\n");
-            break;
-        case 6:
-            printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
-            break;
-        case 7:
-            printf("CLIENT ERROR: Could not read from socket\n");
-            break;
-        case 10:
-            printf("SERVER ERROR: Could not open MP3 directory\n");
-            break;
-        default:
-            printf("Undefined Error Code: %d\n", status);
-            break;
-		}
+        // Create the underlying TCP socket connection to the remote host
+        sockfd = setActiveServer();
+        // Bind the SSL object to the network socket descriptor. The socket descriptor
+        // will be used by OpenSSL to communicate with a server. This function should
+        // only be called once the TCP connection is established, i.e., after
+        // create_socket()
+        SSL_set_fd(ssl, sockfd);
 
-    // Deallocate memory for the SSL data structures and close the socket
-    SSL_free(ssl);
-    SSL_CTX_free(ssl_ctx);
-    close(sockfd);
-    printf("Client: Terminated SSL/TLS connection with server '%s'\n",
-     remote_host);
+        // Initiates an SSL session over the existing socket connection. SSL_connect()
+        // will return 1 if successful.
+        if (SSL_connect(ssl) == 1)
+            printf("Client: Established SSL/TLS session to server\n");
+        else {
+            fprintf(stderr, "Client: Could not establish SSL session to server\n");
+            exit(EXIT_FAILURE);
+        }
+        //get filename from user
+        printf("Please enter filename to request from server (filename must not have spaces)\n, or type 'ls' to receive a list of available files: ");
+        fgets(buffer, BUFFER_SIZE - 1, stdin);
+        buffer[strlen(buffer) - 1] = '\0';
+        status = download_file(ssl, buffer);
+        switch (status) {
+            case 0:
+                printf("%s downloaded\n", buffer);
+                break;
+            case 1:
+                printf("SERVER ERROR: Could not open requested file\n");
+                break;
+            case 2:
+                printf("SERVER ERROR: Opened, but could not read requested file\n");
+                break;
+            case 3:
+                printf("CLIENT ERROR: Server could not write to socket during file transmission\n");
+                break;
+            case 4:
+                printf("RPC ERROR, invalid command\n");
+                break;
+            case 5:
+                printf("RPC ERROR, requested path is a directory, not a file\n");
+                break;
+            case 6:
+                printf("RPC ERROR: Too many arguments provided. Ensure no spaces in file name\n");
+                break;
+            case 7:
+                printf("CLIENT ERROR: Could not read from socket\n");
+                break;
+            case 10:
+                printf("SERVER ERROR: Could not open MP3 directory\n");
+                break;
+            default:
+                printf("Undefined Error Code: %d\n", status);
+                break;
+        }
 
+        // Deallocate memory for the SSL data structures and close the socket
+        SSL_free(ssl);
+        SSL_CTX_free(ssl_ctx);
+        close(sockfd);
+        printf("Client: Terminated SSL/TLS connection with server '%s'\n",
+               remote_host);
+    }
     return EXIT_SUCCESS;
 }
 
