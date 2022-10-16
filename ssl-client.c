@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
     buffer[strlen(buffer)-1] = '\0';
     //send username and password to server which will read from a file and compare. After comparing send back 0 for matching
     printf("\n\nPassword check is %d\n",checkPassword(buffer));
-    if( !checkPassword(bufferPW) ){
+    if( !checkPassword(buffer) ){
         exit(EXIT_FAILURE);
      }
 
@@ -335,7 +335,12 @@ bool checkPassword(char* userInput) {
     while ((bytesRead = read(fd, buffer, BUFFER_SIZE) > 0)) {
 	    write(fd, buffer, bytesRead);
     }
-
+	
+	//testing
+	//printf("Hash: %s\n", hashed_input);
+	//printf("Buff: %s\n", buffer);
+	//printf("strc: %i\n", strcmp(hashed_input, buffer));
+	//test end
     if(strcmp(hashed_input,buffer)==0){
         authenticated = true;
     }
