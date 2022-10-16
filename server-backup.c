@@ -348,11 +348,6 @@ int main(int argc, char **argv) {
             SSL_free(ssl);
             close(client);
         }
-        // Tear down and clean up server data structures before terminating
-        SSL_CTX_free(ssl_ctx);
-        cleanup_openssl();
-        close(sockfd);
-        return EXIT_SUCCESS;
     }
 #pragma clang diagnostic pop
 }
@@ -365,9 +360,11 @@ int response(SSL *ssl, const char* filename) {
     int local_status = 0;
     ssize_t bytesRead = 1;
     ssize_t bytesWritten;
+    int filedata_size = 257;
     char send_buffer[BUFFER_SIZE];
-    char filedata[BUFFER_SIZE];
+    char filedata[filedata_size];
     char* filepath;
+
 
     if (strcmp(filename, "ls") == 0 ){
         // Open the directory and check for error
@@ -381,8 +378,8 @@ int response(SSL *ssl, const char* filename) {
         // Iterate through all directory entries
         while(currentEntry != NULL) {
             // Check to see if the item is a subdirectory
-            sprintf(filedata, "%-510s\n", currentEntry->d_name);
-            bytesWritten = SSL_write(ssl, filedata, BUFFER_SIZE);
+            sprintf(filedata, "%-255s\n", currentEntry->d_name);
+            bytesWritten = SSL_write(ssl, filedata, filedata_size);
             //handle errors from writing
             if (bytesWritten < 0){
                 fprintf(stderr, "Server: Error writing to socket: %s\n", strerror(errno));

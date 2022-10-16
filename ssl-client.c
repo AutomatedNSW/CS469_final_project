@@ -253,6 +253,8 @@ int download_file(SSL *ssl, const char* filename){
     int nbytes_read;
     int file_descriptor;
     int error_number = 0;
+    int filedata_size = 257;
+    int operation_size;
     char request[BUFFER_SIZE];
     char local_buffer[BUFFER_SIZE];
     bool transfer_complete = false;
@@ -266,12 +268,14 @@ int download_file(SSL *ssl, const char* filename){
     else {
         if(strcmp(filename,"ls") == 0){
             file_descriptor = 1; //stdout
+            operation_size = filedata_size;
         }
         else{
+            operation_size = BUFFER_SIZE;
             file_descriptor = open(filename, O_CREAT|O_RDWR,(mode_t)0644);
         }
         while (transfer_complete == false) {
-            nbytes_read = SSL_read(ssl, local_buffer, BUFFER_SIZE);
+            nbytes_read = SSL_read(ssl, local_buffer, operation_size);
             if (nbytes_read < 0){
                 fprintf(stderr, "Client: Error reading from socket: %s\n", strerror(errno));
                 error_number = 7;
@@ -283,7 +287,7 @@ int download_file(SSL *ssl, const char* filename){
                 }
                 sscanf(local_buffer, "ERROR: %d", &error_number);
                 if (error_number == 0){
-                    write(file_descriptor, local_buffer, BUFFER_SIZE);
+                    write(file_descriptor, local_buffer, operation_size);
                 }
                 else{
                     transfer_complete = true;
