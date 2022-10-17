@@ -45,10 +45,6 @@ SYNOPSIS: This program is a small client application that establishes a secure
 #define MAX_HOSTNAME_LENGTH 256
 #define BUFFER_SIZE         512
 #define MAX_FILENAME_LENGTH 250
-#define PASSWORD_LENGTH     32
-#define USERNAME_LENGTH     32
-#define HASH_LENGTH         264
-#define SEED_LENGTH         8
 
 //Declare function prototypes
 int download_file(SSL *ssl, const char* filename);
@@ -138,11 +134,6 @@ int main(int argc, char** argv) {
   SSL_CTX*          ssl_ctx;
   SSL*              ssl;
   int               status;
-    //below is for password section
-  char  bufferPW[USERNAME_LENGTH + HASH_LENGTH + 1];
-  char  password[PASSWORD_LENGTH];
-  char  username[USERNAME_LENGTH];
-  char  hash[HASH_LENGTH];
 
   // Initialize OpenSSL ciphers and digests
   OpenSSL_add_all_algorithms();
@@ -162,11 +153,10 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Unable to create a new SSL context structure.\n");
     exit(EXIT_FAILURE);
   }
-    // **** Bryant should insert his checkPassword() call here, maybe inside a while loop until it's auth'd ***
+    
     printf("\nPlease enter password:\n");
     fgets(buffer, BUFFER_SIZE-1, stdin);
     buffer[strlen(buffer)-1] = '\0';
-    //send username and password to server which will read from a file and compare. After comparing send back 0 for matching
 
     if( !checkPassword(buffer) ){
         printf("\nPassword check has failed!\n");
@@ -200,7 +190,7 @@ int main(int argc, char** argv) {
             exit(EXIT_FAILURE);
         }
         //get filename from user
-        printf("Please enter filename to request from server (filename must not have spaces)\n, or type 'ls' to receive a list of available files: ");
+        printf("Please enter filename to request from server (filename must not have spaces),\n or type 'ls' to receive a list of available files: ");
         fgets(buffer, BUFFER_SIZE - 1, stdin);
         buffer[strlen(buffer) - 1] = '\0';
         status = download_file(ssl, buffer);
@@ -241,8 +231,7 @@ int main(int argc, char** argv) {
         SSL_free(ssl);
         SSL_CTX_free(ssl_ctx);
         close(sockfd);
-        printf("Client: Terminated SSL/TLS connection with server '%s'\n",
-               remote_host);
+        printf("Client: Terminated SSL/TLS connection with server\n");
     }
     return EXIT_SUCCESS;
 }
@@ -301,27 +290,28 @@ int download_file(SSL *ssl, const char* filename){
     return error_number;
 }
 
-// Kaycee's code for setActiveServer
+//sets active server to use for socket to determine if backup server should be used.
 int setActiveServer() {
   int sockfd;
   // Creates the underlying TCP socket connection to the remote host
   sockfd = create_socket(DEFAULT_HOST, DEFAULT_PORT);
   if(sockfd > 0)
-    fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", DEFAULT_HOST, DEFAULT_PORT);
+    fprintf(stderr, "Client: Established TCP connection to '%s'\n", DEFAULT_HOST);
   // The first attempt to connect did not succeed; tries the backup server
   else {
-    printf("Trying backup server on port %u\n", DEFAULT_PORT);
+    //printf("Trying backup server on port %u\n", DEFAULT_PORT);
     sockfd = create_socket(BACKUP_HOST, BACKUP_PORT);
     if(sockfd > 0)
-      fprintf(stderr, "Client: Established TCP connection to '%s' on port %u\n", BACKUP_HOST, BACKUP_PORT);
+      fprintf(stderr, "Client: Established TCP connection to '%s'\n", BACKUP_HOST);
     else {
-      fprintf(stderr, "Client: Could not establish TCP connection to %s on port %u\n", BACKUP_HOST, BACKUP_PORT);
+      fprintf(stderr, "Client: Could not establish TCP connection to %s\n", BACKUP_HOST);
       exit(EXIT_FAILURE);
     }
   }
   return sockfd;
 }
 
+//returns true/false if password is authenticated
 bool checkPassword(char* userInput) {
     char hashed_input[BUFFER_SIZE];
     char buffer[BUFFER_SIZE];
